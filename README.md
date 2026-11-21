@@ -2,40 +2,51 @@
 
 **Author: Zaid Rasras**
 
-An object detection project that trains YOLO11s to locate helmets and heads in construction-site images. The project includes annotation conversion, dataset preparation, training, evaluation, prediction visualization, and ONNX export.
+An object detection project that uses YOLO11s to detect helmets and heads in construction-site images.
+
+📓 [View the project notebook](hard-hat-detection-by-zaidKaggle.ipynb)
 
 ## Dataset
 
-[Hard Hat Detection — Andrew MVD on Kaggle](https://www.kaggle.com/datasets/andrewmvd/hard-hat-detection)
+This project uses the [Hard Hat Detection dataset by Andrew MVD](https://www.kaggle.com/datasets/andrewmvd/hard-hat-detection).
 
-The dataset contains 5,000 images with Pascal VOC XML annotations. Its original classes are `helmet`, `head`, and `person`.
+The dataset contains:
 
-The notebook first explores a three-class detector, then trains a final two-class model:
+- 5,000 images.
+- Pascal VOC XML bounding-box annotations.
+- Three original classes: `helmet`, `head`, and `person`.
+
+The notebook includes an initial three-class experiment, followed by a final model trained on two classes:
 
 | Class ID | Class |
 |---|---|
 | 0 | helmet |
 | 1 | head |
 
-Each XML bounding box is converted to the normalized YOLO format:
+## Project Workflow
+
+1. Read the XML annotations and organize objects in a DataFrame.
+2. Convert Pascal VOC bounding boxes into normalized YOLO labels.
+3. Train and evaluate an initial three-class model.
+4. Prepare a separate two-class training, validation, and test split.
+5. Train the final YOLO11s detector.
+6. Select a confidence threshold using validation data.
+7. Evaluate the final model on the test split.
+8. Export the model to ONNX and compare sample predictions.
+
+## Annotation Format
+
+Each generated YOLO label file contains one line per object:
 
 ```text
 class_id x_center y_center width height
 ```
 
-## Workflow
-
-1. Parse XML annotations and inspect the object table.
-2. Convert bounding boxes to YOLO labels.
-3. Train an initial three-class baseline.
-4. Prepare the final helmet/head dataset with separate training, validation, and test splits.
-5. Train a fresh pretrained YOLO11s model on the two-class task.
-6. Select a confidence threshold using validation F1 scores and evaluate on the test split.
-7. Export to ONNX, compare sample predictions, and save environment details.
+The coordinates and box dimensions are normalized by the image width and height.
 
 ## Final Dataset Split
 
-Images with identical 8×8 average hashes are grouped together before splitting. This reduces some duplicate leakage, but does not guarantee that all similar images or related scenes remain in the same split.
+Images with identical 8×8 average hashes are grouped before splitting to reduce some duplicate leakage. This method does not detect every similar image or related scene.
 
 | Split | Images |
 |---|---:|
@@ -43,21 +54,19 @@ Images with identical 8×8 average hashes are grouped together before splitting.
 | Validation | 746 |
 | Test | 745 |
 
-The final dataset is generated under `/kaggle/working/yolo_dataset_v2`, with `images/train`, `images/val`, `images/test`, matching `labels` folders, and `data.yaml`.
-
-## Training Configuration
+## Model and Training
 
 | Setting | Value |
 |---|---|
-| Pretrained model | `yolo11s.pt` |
+| Model | YOLO11s |
+| Starting weights | `yolo11s.pt` |
 | Epochs | 30 |
 | Image size | 640 |
 | Batch size | 16 |
 | Early-stopping patience | 10 |
-| GPU in saved run | NVIDIA Tesla T4 |
-| Ultralytics in saved run | 8.4.216 |
+| GPU | NVIDIA Tesla T4 |
 
-The final model is trained using:
+The final training configuration is:
 
 ```python
 from ultralytics import YOLO
@@ -79,68 +88,84 @@ model.train(
 
 ## Final Test Results
 
-The notebook selects a confidence threshold of approximately **0.452** using the validation mean F1 curve, then evaluates on **745 test images containing 3,761 annotated objects**.
+The confidence threshold was selected using the validation mean F1 curve, giving approximately **0.452**.
+
+The final evaluation used **745 test images containing 3,761 annotated objects**.
 
 | Class | Precision | Recall | mAP50 | mAP50–95 |
 |---|---:|---:|---:|---:|
 | All classes | 0.939 | 0.891 | 0.8806 | 0.6017 |
-| helmet | 0.9608 | 0.8904 | 0.8912 | 0.608* |
-| head | 0.9168 | 0.8917 | 0.8699 | 0.595* |
+| helmet | 0.9608 | 0.8904 | 0.8912 | 0.608 |
+| head | 0.9168 | 0.8917 | 0.8699 | 0.595 |
 
-*Per-class mAP50–95 values are rounded as displayed in the saved evaluation log.*
+**Evaluation note:** the test evaluation filters predictions using the selected confidence threshold before calculating AP. These AP values are not directly comparable to evaluations using a much lower confidence cutoff to construct the full precision–recall curve.
 
-**Evaluation detail:** the test call passes the selected confidence threshold to the validator. AP is therefore computed after that confidence filtering; it should not be treated as directly comparable to AP measured with the usual low confidence cutoff used to construct a fuller precision–recall curve. These are detection metrics, not classification accuracy.
+These are object detection metrics, not classification accuracy.
 
-The initial three-class experiment has much weaker person detection. The final results above belong to the separately trained two-class model and its different split.
+## Visualizations and Export
 
-## Visual Results and Export
+The notebook includes:
 
-The notebook includes training curves, a confusion matrix, sample predictions, and a helmet/head detection-count overlay for the initial baseline. The final section includes test evaluation and an ONNX comparison.
+- Training curves and a confusion matrix for the initial model.
+- Sample bounding-box predictions.
+- A helmet/head detection-count overlay.
+- Final two-class validation and test results.
+- ONNX export and a sample comparison with PyTorch predictions.
 
-On the single image used for the ONNX comparison, both models returned two detections with matching confidence scores to four decimal places. This is a basic sample check, not a full numerical equivalence test.
-
-The final trained checkpoint and export are generated at:
-
-```text
-/kaggle/working/runs/hardhat_yolo11s_2class/weights/best.pt
-/kaggle/working/runs/hardhat_yolo11s_2class/weights/best.onnx
-```
-
-Weights are separate files and are not embedded in the notebook.
+The ONNX comparison returned the same detection count and matching confidence scores to four decimal places on one image. This is a basic check rather than comprehensive equivalence testing.
 
 ## How to Run
 
-1. Download or clone this repository and open `hard_hat_detection_yolo11.ipynb` in Kaggle.
-2. Attach the Hard Hat Detection dataset linked above.
-3. Enable a GPU and internet access for package installation and pretrained-weight downloads.
-4. Verify the input paths. The saved notebook uses:
+1. Open `hard-hat-detection-by-zaidKaggle.ipynb` in Kaggle.
+2. Attach the Hard Hat Detection dataset.
+3. Enable GPU acceleration and internet access for installing dependencies and downloading pretrained weights.
+4. Check the dataset paths used in the notebook:
 
    ```text
    /kaggle/input/datasets/andrewmvd/hard-hat-detection/images
    /kaggle/input/datasets/andrewmvd/hard-hat-detection/annotations
    ```
 
-5. Run the cells in order. The notebook contains both the initial baseline and the final two-class experiment.
-6. Download the trained weights, generated plots, and `/kaggle/working/requirements.txt` from the notebook outputs.
+5. Run the cells in order.
+6. Download the generated weights, plots, ONNX model, and environment requirements from the Kaggle outputs.
 
-The notebook installs Ultralytics itself. Rerunning the final preparation cell deletes and rebuilds its `yolo_dataset_v2` output directory. Repeated training can create suffixed run directories; update checkpoint paths if that occurs.
+The final model files are generated at:
 
-## Tools
+```text
+/kaggle/working/runs/hardhat_yolo11s_2class/weights/best.pt
+/kaggle/working/runs/hardhat_yolo11s_2class/weights/best.onnx
+```
 
-Python, Ultralytics YOLO, PyTorch, OpenCV, NumPy, pandas, scikit-learn, Matplotlib, PyYAML, and ONNX Runtime.
+Model weights are separate files and are not embedded in the notebook.
+
+Repeated training may create a run directory with a different suffix. Update checkpoint paths if needed.
+
+## Technologies
+
+- Python
+- Ultralytics YOLO and PyTorch
+- OpenCV
+- NumPy and pandas
+- scikit-learn
+- Matplotlib
+- PyYAML
+- ONNX Runtime
 
 ## Limitations
 
-- Helmet and head boxes do not automatically establish each worker’s safety status; the notebook does not associate detections with individual workers or track them.
-- Average-hash grouping is a limited duplicate check.
-- The initial experiment and final experiment use the same source dataset; the final test split is not a new external dataset.
-- Performance in other sites, lighting conditions, or camera views requires additional evaluation.
-- The notebook demonstrates still-image inference and export, rather than a deployed webcam application.
+- Detection counts do not establish the safety status of every worker.
+- The model does not associate helmets and heads with individual people or track workers.
+- Average-hash grouping provides only a limited duplicate check.
+- The initial and final experiments use the same source dataset; the final test split is not an external dataset.
+- Performance in new locations and camera conditions requires further evaluation.
+- This project demonstrates still-image inference and model export, rather than a deployed safety-monitoring application.
 
 ## Acknowledgments
 
-Dataset: [Andrew MVD — Hard Hat Detection](https://www.kaggle.com/datasets/andrewmvd/hard-hat-detection).
+- [Andrew MVD — Hard Hat Detection dataset](https://www.kaggle.com/datasets/andrewmvd/hard-hat-detection)
+- [Ultralytics — detection framework and pretrained models](https://github.com/ultralytics/ultralytics)
+- Community YOLO notebooks studied during project development.
 
-Detection framework and pretrained model: [Ultralytics](https://github.com/ultralytics/ultralytics).
+## Author
 
-Community notebooks studied during development: *Safety Helmet Detection YOLOv8* and *Helmet Detection with YOLOv8*. Add their original Kaggle URLs and author credits when sharing any adapted code, and follow the relevant licenses.
+[Zaid Rasras](https://github.com/zaidrasras31)
